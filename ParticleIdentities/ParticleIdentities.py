@@ -1,18 +1,3 @@
-'''
-1st selection: 3DC, 1050co distance, ftrless
-    - 53142 particles
-    - based on 184253 particles (J20 384b1_bs_2)
-    - based on 2DC of 299556 particles (Extract/384b1_notrash_wide)
-    - based on 2DC of 777793 particles (Class2D/768bin3, everything but trash)
-
-2nd selection: 3DC, 971co distance, ftrless
-    - 55031 particles
-    - based on 184253 particles (J20 384b1_bs_2)
-    - based on 2DC of 299556 particles (Extract/384b1_notrash_wide)
-    - based on 2DC of 777793 particles (Class2D/768bin3, everything but trash)
-
-'''
-
 import pandas as pd
 import numpy as np
 import glob
@@ -21,7 +6,11 @@ from datetime import date
 from collections import OrderedDict
 
 '''
-USAGE TO BE WRITTEN LELMAO
+USAGE: Execute in directory with arbitrary number of particle.star files.
+
+Program will compare particle identities between classes in a pairwise, round-robin manner and write out both total
+amount of particles overlapping between pairs as well as percentage overlap (careful: percentage overlap depends 
+on total number of particles per class and is individual to each class!).
 
 '''
 
@@ -107,7 +96,7 @@ class Star:
 
 
 if __name__ == '__main__':
-
+    print("Comparing particle identities between following particle.star files: ")
     # Getting all particle IDs
     particle_groups = OrderedDict()
     for file in sorted(glob.glob("*.star")):
@@ -118,7 +107,7 @@ if __name__ == '__main__':
         particle_groups[file] = particle_series
 
     # Analyze particle identities between groups
-    # Save identities (total & percentage) in array
+    print("Analyzing particle identities...")
     colnames = list(particle_groups.keys())
     num_matrix = np.ndarray([len(colnames), len(colnames)])
     perc_matrix = np.ndarray([len(colnames), len(colnames)])
@@ -134,14 +123,12 @@ if __name__ == '__main__':
             result = pd.Series(np.intersect1d(first, second))
             # Save result in matrix
             numResults.loc[i, j] = len(result)
-            percResults.loc[i, j] = len(result) / total_num
+            percResults.loc[i, j] = round(len(result) / total_num * 100)
     # Rename columns and rows (row is index)
     numResults.columns = colnames
     numResults.index = colnames
     percResults.columns = colnames
     percResults.index = colnames
-    print(numResults)
-    print(percResults)
 
     # Calculate total overlap (anything else to compare?)
     all_series = []
@@ -149,25 +136,18 @@ if __name__ == '__main__':
         all_series.append(set(particle_groups[series]))
     sets = map(set, all_series)
     total_overlap = len(set.intersection(*sets))
-    print(total_overlap)
-
+    print("Done!")
     # Print results and save in file
     today = date.today()
     date_string = today.strftime("%y%m%d")
-    '''
-    # Calculate the intersection, i.e. particles IDs that are found in both columns
-    intersection = pd.Series(list(set(first_particle_names) & set(second_particle_names)))
-    len_intersect = len(intersection)
-    
     outfile = date_string + '_particle_identity_check.txt'
-    report_string = "Created on " + date_string + "\n"
-    report_string += "Filename 1: " + filename1 + "\n"
-    report_string += "     NumParticles: " + str(len_first) + "\n"
-    report_string += "Filename 2: " + filename2 + "\n"
-    report_string += "     NumParticles: " + str(len_second) + "\n"
-    report_string += "NumParticles found in both .star files: " + str(len_intersect) + "\n"
-    report_string += "     PercentageIdentity: " + "File 1: " + str(len_intersect / len_first * 100) + \
-                     "% ; File 2: " + str(len_intersect / len_second * 100) +"%\n"
+    print("Writing out results in " + outfile + ".")
+    report_string = "Created on " + date_string + "\n\n"
+    report_string += "Total number of particle overlap between classes:\n"
+    report_string += numResults.to_string() + "\n\n"
+    report_string += "Percentage particle overlap between classes:\n"
+    report_string += percResults.to_string() + "\n\n"
+    report_string += "Total number of particles found in all observed classes: " + str(total_overlap) + "."
     with open(outfile, "w") as fout:
         fout.write(report_string)
-    '''
+    print("Done!")
