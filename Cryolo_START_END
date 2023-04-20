@@ -1,0 +1,123 @@
+import os
+import pandas as pd
+import numpy as np
+import glob
+
+'''
+USAGE
+    - Copy script into folder containing cryolo segmented fibril coordinate star files.
+    - Run with python3: python3 cryolo_star_start_end.py ./*star
+    - Will output *.star files, containing only the start and end coordinates of traced filaments
+'''
+
+
+class Star:
+
+    def __init__(self, filename=''):
+        # Initialize parser
+        self.lines = list()
+        self.datablocks = list()
+        self.datapairs = dict()
+        self.filename = filename
+        self.dataframes = list()
+        # Read .star file
+        if filename != '':
+            self.read()
+        # Create start-end coordinates
+        self.start_end_df = self.get_filament_id(self.dataframes[0])
+        # Write out coordinate file
+        self.write_cryolo_dataframe()
+
+    def __str__(self):
+        print(self.dataframes)
+        print(self.dataframe_to_string(self.dataframes[0]))
+        return ':)'
+
+    def read(self):
+        # Reads rln star file and saves coordinates (and other, useless data) into an internal dataframe.
+        self.read_file(self.filename)
+        self.parse_lines()
+        self.parse_datablocks()
+
+    def read_file(self, file):
+        # Read file and saves lines in lines and orig_lines
+        with open(file) as fin:
+            self.lines = fin.readlines()
+
+    def parse_lines(self):
+        # Parses lines for loops
+        datablock = []
+        in_datablock = False
+        for line in self.lines:
+            line = line.strip()
+            if line == "loop_":
+                in_datablock = True
+                datablock = []
+                continue
+            if line == '' and in_datablock:
+                in_datablock = False
+                self.datablocks.append(datablock)
+                continue
+            if line == '':
+                continue
+            if in_datablock:
+                datablock.append(line)
+                continue
+        if in_datablock:
+            self.datablocks.append(datablock)
+
+    def parse_datablocks(self):
+        # Converts .star loop into a panda dataframe
+        for datablock in self.datablocks:
+            loop = dict()
+            col_names = []
+            for line in datablock:
+                line = line.strip()
+                if line[0] == '_':
+                    col_names.append(line[1:])
+                    loop[line[1:]] = []
+                else:
+                    values = line.split()
+                    for i in range(len(col_names)):
+                        loop[col_names[i]].append(values[i])
+            df = pd.DataFrame(loop)
+            self.dataframes.append(df)
+
+    def dataframe_to_string(self, dataframe):
+        # Converts dataframe into a .star file compatible string
+        # Conversion of dataframe into fragments
+        columns = [*dataframe]
+        tostring = ''
+        tostring = '\ndata_\n\nloop_' + '\n'
+        for colname in columns:
+            tostring += '_' + colname + '\n'
+        tostring += dataframe.to_string(index=False, header=False)
+        return tostring
+
+    # Getting start-end-coordinates
+    def get_filament_id(self, dataframe):
+        # Get maximum filament id and create list of all ids
+        max_fil_id = dataframe.max(axis=0)['rlnHelicalTubeID #4']
+        fil_id_list = [x for x in range(1, int(max_fil_id) + 1)]
+        # Create start_end dataframe
+        start_end_df = pd.DataFrame(columns=dataframe.columns, index=[0])
+        for id in fil_id_list:
+            subset = dataframe.loc[dataframe['rlnHelicalTubeID #4'] == str(id)]
+            start_end_df.loc[len(start_end_df)] = subset.iloc[0]
+            start_end_df.loc[len(start_end_df)] = subset.iloc[-1]
+        return start_end_df.iloc[1:, :-3]
+
+    # Write output files
+    def write_cryolo_dataframe(self):
+        print("Writing file..")
+        outfile = self.filename.split('.')[0] + '_START_END.star'
+        outstring = self.dataframe_to_string(self.start_end_df)
+        with open(outfile, 'w') as fout:
+            fout.write(outstring)
+            print("Done.")
+
+
+if __name__ == '__main__':
+    for file in glob.glob("*.star"):
+        print(file)
+        parser = Star(filename=file)
