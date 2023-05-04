@@ -110,7 +110,7 @@ class Star:
     # Write output files
     def write_cryolo_dataframe(self):
         print("Writing file..")
-        outfile = self.filename.split('.')[0] + '_START_END.star'
+        outfile = self.filename.split('.', 1)[0] + '_START_END.star'
         outstring = self.dataframe_to_string(self.start_end_df)
         with open(outfile, 'w') as fout:
             fout.write(outstring)
