@@ -1,0 +1,156 @@
+import pandas as pd
+import numpy as np
+import mrcfile
+import xml.etree.ElementTree as ET
+import matplotlib.pyplot as plt
+
+'''
+Parsing xml file
+
+TODO: Coordinates from amira do not match coordinates from tomogram! 
+    - Z axis is Y axis
+    - X axis is ?
+    - Z axis is ?
+    
+    --> If you look at the subtomogram created with amira box coordinates, you can see the filament is not caught
+'''
+
+# Path to the XML file
+xml_file = 'coordinates_amira.xml'
+
+# Parse the XML file
+tree = ET.parse(xml_file)
+root = tree.getroot()
+
+# Namespace dictionary for XML elements
+namespaces = {
+    'ss': 'urn:schemas-microsoft-com:office:spreadsheet',
+    'html': 'http://www.w3.org/TR/REC-html40'
+}
+
+# Find the 'Nodes' worksheet and extract data
+nodes_worksheet = root.find(".//ss:Worksheet[@ss:Name='Nodes']", namespaces)
+node_rows = nodes_worksheet.findall(".//ss:Row", namespaces)
+node_data = []
+
+for row in node_rows:
+    row_data = []
+    for cell in row.findall("ss:Cell", namespaces):
+        data = cell.find("ss:Data", namespaces)
+        row_data.append(data.text)
+    node_data.append(row_data)
+
+# Create a DataFrame for the 'Nodes' data
+node_df = pd.DataFrame(node_data[1:], columns=node_data[0])
+
+# Find the 'Points' worksheet and extract data
+points_worksheet = root.find(".//ss:Worksheet[@ss:Name='Points']", namespaces)
+point_rows = points_worksheet.findall(".//ss:Row", namespaces)
+point_data = []
+
+for row in point_rows:
+    row_data = []
+    for cell in row.findall("ss:Cell", namespaces):
+        data = cell.find("ss:Data", namespaces)
+        row_data.append(data.text)
+    point_data.append(row_data)
+
+# Create a DataFrame for the 'Points' data
+point_df = pd.DataFrame(point_data[1:], columns=point_data[0])
+
+# Print the DataFrames
+print("Nodes DataFrame:")
+print(node_df)
+print("\nPoints DataFrame:")
+print(point_df)
+
+# Get box dimension
+x_min = float(point_df['X Coord'].min())
+x_max = float(point_df['X Coord'].max())
+y_min = float(point_df['Y Coord'].min())
+y_max = float(point_df['Y Coord'].max())
+z_min = float(point_df['Z Coord'].min())
+z_max = float(point_df['Z Coord'].max())
+
+'''
+TEST 
+
+From (753.0, 213.0) to (931.0, 215.0) =
+  178.0 pixels, 164.657 nm
+From (753.0, 213.0) to (755.0, 401.0) =
+  188.0 pixels, 173.906 nm
+  
+  y_min = 0
+  y_max = 200
+  x_min = 755
+  x_max = 931
+  z_min = 215
+  z_max = 400
+
+
+y_min = 86
+y_max = 130
+x_min = 755
+x_max = 931
+z_min = 215
+z_max = 400
+'''
+'''
+Open tomogram, get dimensions, pad the box, create a subtomogram, then project it in z
+'''
+
+# Open the MRC file
+with mrcfile.open('59_newstack_full_rec_corrected.mrc', permissive=True) as mrc:
+    # Get the voxel data and its dimensions
+    voxel_data = mrc.data
+    tomogram_dimensions = voxel_data.shape # not used
+
+    # Normalize the voxel data
+    normalized_data = (voxel_data - np.min(voxel_data)) / (np.max(voxel_data) - np.min(voxel_data))
+
+# Allow projection of all slices vs range of subtomo
+
+
+# Use the adjusted box coordinates to create the subtomogram
+subtomogram = voxel_data[
+    int(z_min):int(z_max),
+    int(y_min):int(y_max),
+    int(x_min):int(x_max)
+]
+
+'''
+# DEBUGGING; FULL TOMOGRAM
+# Use the adjusted box coordinates to create the subtomogram
+subtomogram = normalized_data[
+    int(0):int(1024),
+    int(0):int(200),
+    int(0):int(1024)
+]
+'''
+
+# Normalized the subtomogram data
+normalized_subtomogram = (subtomogram - np.min(subtomogram)) / (np.max(subtomogram) - np.min(subtomogram))
+
+
+
+# Perform projection of subtomogram onto the XZ plane --> Y coordinates in amira are Z slices
+projection = np.sum(normalized_subtomogram, axis=1)
+
+# Print the adjusted box coordinates and the projection shape
+print("Box Coordinates:")
+print("X: {} to {}".format(x_min, x_max))
+print("Y: {} to {}".format(y_min, y_max))
+print("Z: {} to {}".format(z_min, z_max))
+print("Projection Shape:", projection.shape)
+
+# Create the figure and axis
+fig, ax = plt.subplots()
+
+# Display the projection as an image
+image = ax.imshow(projection, cmap='gray', origin='lower')
+
+# Add a colorbar
+colorbar = fig.colorbar(image)
+
+# Show the plot
+plt.show()
