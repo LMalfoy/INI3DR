@@ -1,0 +1,8 @@
+Goal:
+- Have a set of functions / classes that allow generation of 1D / 2D images
+    - Random pixel values
+    - Pixel values according to 1D / 2D sine waves
+    - Save in mrc and tif format
+- Have a function that generates an FFT image
+- Have a function that calculates cross-correlations
+- Have a function that LPFs / HPFs images
