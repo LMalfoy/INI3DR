@@ -1,0 +1,44 @@
+# Presets
+preset "overall look" "publication 1 (silhouettes)"
+
+# Opening PDB file, will be ID 1
+open WT_model_2PF_final.pdb
+style stick
+hide cartoons
+show atoms
+
+# Coloring
+color #1:1-60 #EE5841
+#(N-terminus, orange)
+color #1:61-95 #A054A0
+#(NAC, purple)
+color #1:96-140 #65C08C
+#(C-terminus, green)
+color #!1 byhetero
+#(heteroatoms in blue / red)
+
+# Opening density map file, will be ID 2, set standard settings for map colour, step size, transparency and threshold
+open WT_complete_map.mrc
+color #2 #b2b2b2
+volume #2 step 1
+transparency #2 95
+volume #2 level 0.01
+
+# Showing only density near atoms, to see single betasheet
+surface zone #2 nearAtoms #1 distance 2.375 maxComponents 10
+# distance is radius around atoms in A
+# maxComponents is how many biggest density patches are shown (to remove clutter)
+
+# Camera control (for WT)
+view orient
+turn x 180
+turn z -35
+
+# Lighting to soft
+lighting soft
+
+# add scalebar
+scalebar
+
+# Save image
+save WT_front_2PF.tif width 6027 height 3000 supersample 3 transparentBackground false
