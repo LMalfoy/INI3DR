@@ -1,24 +1,42 @@
+'''
+What kind of statistics are nice to have?
+    - Visualization of spending in each category (pie chart). DONE
+    - Spending in each category over the months / weeks (as stacked bars?)
+    - History of spending in a list
+    - MAIN:
+        - Daily Budget Counter (number of days in positive, total sum accumulated). DONE
+        - Total spending. DONE
+    - On a PER MONTH basis. DONE
+
+TODO:
+    - Add functionality so that app knows the date, and in which monthly cycle it is. DONE
+    - Need to create one dataset per week, and then add the weeks to the monthly dataset. DONE
+    - These monthly dataset will serve as the basis for the statistical stuff. DONE
+
+    - Save past entries into database. DONE
+    - Load database. DONE
+
+    - Archive: Look at past months. Show stacked bar graph to show how spending has changed in each category.
+    - Look at complete list of spendings (chronologically and sorted by category and sorted by smallest / largest)
+'''
+
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.anchorlayout import AnchorLayout
-from kivy.uix.widget import Widget
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.core.window import Window
-from kivy.core.image import Image as CoreImage
 from kivy.uix.image import Image
-
-import io
-
+from kivy.core.image import Image as CoreImage
+from kivy.uix.widget import Widget
+from kivy.core.window import Window
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+import io
 from datetime import datetime
+import json
+import os
 
 kategorien = [
     ("Wohnen", 1),
@@ -27,9 +45,6 @@ kategorien = [
     ("Gesundheit und Pflege", 4),
     ("Freizeit", 5),
 ]
-
-import pandas as pd
-from datetime import datetime
 
 # Initial empty DataFrame with EntryID column
 df = pd.DataFrame(columns=['EntryID', 'Kategorie', 'Label', 'Betrag', 'Timestamp'])
@@ -54,6 +69,10 @@ def add_entry(kategorie, label, betrag):
     df = pd.concat([df, new_entry], ignore_index=True)
     # Increment the EntryID for the next entry
     next_entry_id += 1
+    print("New entry added:", new_entry)  # Print to console for confirmation
+
+    # Save the updated DataFrame to JSON
+    save_data_to_json()
 
 # Function to remove an entry by EntryID
 def remove_entry(entry_id):
@@ -66,22 +85,34 @@ def remove_entry(entry_id):
     else:
         print(f"Entry {entry_id} does not exist.")
 
+# Saving and loading database to and from JSON
+def save_data_to_json():
+    # Convert the DataFrame to a dictionary with string format for Timestamps
+    data_dict = df.copy()
+    data_dict['Timestamp'] = data_dict['Timestamp'].apply(lambda x: x.isoformat() if pd.notnull(x) else None)
+    data_dict = data_dict.to_dict(orient='records')
+
+    # Save the dictionary as a JSON file
+    with open('budget_data.json', 'w') as json_file:
+        json.dump(data_dict, json_file)
+    print("Data saved to budget_data.json")
+
+def load_data_from_json():
+    global df
+    # Check if the JSON file exists
+    if os.path.exists('budget_data.json'):
+        with open('budget_data.json', 'r') as json_file:
+            data_dict = json.load(json_file)
+            # Convert the dictionary back to a DataFrame
+            df = pd.DataFrame(data_dict)
+            # Convert the 'Timestamp' column back to datetime objects
+            df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce')
+        print("Data loaded from budget_data.json")
+    else:
+        print("No data file found. Starting with an empty DataFrame.")
+
+
 # Statistics stuff
-'''
-What kind of statistics are nice to have?
-    - Visualization of spending in each category (pie chart)
-    - Spending in each category over the months / weeks (as stacked bars?)
-    - History of spending in a list
-    - MAIN:
-        - Daily Budget Counter (number of days in positive, total sum accumulated)
-        - Total spending
-    - On a PER MONTH basis
-    
-TODO:
-    - Add functionality so that app knows the date, and in which monthly cycle it is. DONE
-    - Need to create one dataset per week, and then add the weeks to the monthly dataset
-    - These monthly dataset will serve as the basis for the statistical stuff
-'''
 
 def get_total_spending_for_day(date):
     # Convert the date to a datetime object
@@ -146,13 +177,18 @@ budget_counter = calculate_budget_counter(daily_budget)
 print("Budget Counter for the current month:", budget_counter)
 
 # Visualizations
-def generate_pie_chart():
+def generate_pie_chart(width, height):
     # Example data for the pie chart
     categories = df['Kategorie'].unique()
     spending = [df[df['Kategorie'] == category]['Betrag'].sum() for category in categories]
 
-    # Create a larger pie chart with transparent background
-    fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figsize for larger image
+    # Calculate the figure size in inches (assuming 100 pixels per inch for DPI)
+    dpi = 100
+    fig_width = width / dpi
+    fig_height = height / dpi
+
+    # Create a pie chart with the specified figure size
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     # Generate pie chart with larger font size and no border
     wedges, texts, autotexts = ax.pie(
@@ -160,20 +196,22 @@ def generate_pie_chart():
         labels=categories,
         autopct='%1.1f%%',
         startangle=90,
-        textprops=dict(fontsize=14),  # Increase font size
+        textprops=dict(color='white', fontsize=15),  # Increase font size
     )
 
     for text in texts:
-        text.set_fontsize(14)  # Set font size for labels
+        text.set_color('white')
+        text.set_fontsize(15)  # Set font size for labels
 
     for autotext in autotexts:
-        autotext.set_fontsize(14)  # Set font size for percentages
+        autotext.set_color('black')
+        autotext.set_fontsize(15)  # Set font size for percentages
 
     ax.axis('equal')  # Equal aspect ratio ensures the pie is drawn as a circle.
 
     # Save the pie chart to a BytesIO object with transparent background
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', transparent=True, bbox_inches='tight')  # Transparent background and no extra border
+    plt.savefig(buf, format='png', transparent=True, bbox_inches='tight')
     buf.seek(0)
     plt.close(fig)  # Close the figure to free memory
 
@@ -250,13 +288,14 @@ class EntryPopup(Popup):
         self.dismiss()
 
 # Main layout with buttons for each category
+
 class BudgetApp(App):
     def build(self):
         # Main layout of the app
         main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
 
         # Layout for the top section (totals and counters)
-        self.top_layout = BoxLayout(orientation='vertical', size_hint_y=0.3)
+        self.top_layout = BoxLayout(orientation='vertical', size_hint_y=0.2)
 
         # Create labels for total spending and budget counter
         self.total_spending_label = Label(text="Total Spending: $0")
@@ -267,8 +306,8 @@ class BudgetApp(App):
         self.top_layout.add_widget(self.budget_counter_label)
 
         # Layout for the pie chart
-        self.pie_chart_image = Image(size_hint_y=0.4)
-        self.update_pie_chart()
+        self.pie_chart_image = Image(size_hint_y=0.6)  # Dynamically resize based on available space
+        self.pie_chart_image.bind(size=self.on_resize)  # Bind size change to on_resize method
 
         # Layout for the buttons at the bottom
         self.bottom_layout = BoxLayout(orientation='horizontal', size_hint_y=0.2)
@@ -289,37 +328,22 @@ class BudgetApp(App):
         # Add all widgets to the main layout
         main_layout.add_widget(self.top_layout)
         main_layout.add_widget(self.pie_chart_image)
-        main_layout.add_widget(Widget())  # Spacer in the middle
         main_layout.add_widget(self.bottom_layout)
 
         # Update totals and counters
         self.update_totals_and_counters()
         return main_layout
 
+    def on_resize(self, instance, value):
+        # Get the new size of the pie chart image
+        width, height = instance.size
+        # Regenerate the pie chart with the new size
+        self.update_pie_chart(width, height)
+
     def show_entry_popup(self, category):
         # Create and open the popup for data entry
         popup = EntryPopup(category, self.update_totals_and_counters)
         popup.open()
-
-    def update_totals_and_counters(self):
-        # Calculate the total spending
-        total_spending = df['Betrag'].sum()
-
-        # Calculate the budget counter (you might need to adjust this based on your logic)
-        # For now, let's assume a simple budget logic
-        daily_budget = 25  # Example daily budget
-        days_in_month = datetime.now().day
-        expected_spending = daily_budget * days_in_month
-        budget_counter = (expected_spending - total_spending) / daily_budget
-
-        # Update the labels
-        self.total_spending_label.text = f"Total Spending: ${total_spending:.2f}"
-        self.budget_counter_label.text = f"Budget Counter: {budget_counter:.2f}"
-
-    def update_pie_chart(self):
-        pie_chart_buf = generate_pie_chart()
-        img = CoreImage(pie_chart_buf, ext='png')
-        self.pie_chart_image.texture = img.texture
 
     def update_totals_and_counters(self):
         # Calculate the total spending
@@ -336,7 +360,14 @@ class BudgetApp(App):
         self.budget_counter_label.text = f"Budget Counter: {budget_counter:.2f}"
 
         # Update the pie chart
-        self.update_pie_chart()
+        self.update_pie_chart(self.pie_chart_image.width, self.pie_chart_image.height)
+
+    def update_pie_chart(self, width, height):
+        pie_chart_buf = generate_pie_chart(width, height)
+        img = CoreImage(pie_chart_buf, ext='png')
+        self.pie_chart_image.texture = img.texture
 
 if __name__ == '__main__':
+    # Load existing data from JSON file
+    load_data_from_json()
     BudgetApp().run()
