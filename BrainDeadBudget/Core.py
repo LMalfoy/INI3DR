@@ -1,28 +1,25 @@
 '''
-What kind of statistics are nice to have?
-    - Visualization of spending in each category (pie chart). DONE
-    - Spending in each category over the months / weeks (as stacked bars?)
-    - History of spending in a list
-    - MAIN:
-        - Daily Budget Counter (number of days in positive, total sum accumulated). DONE
-        - Total spending. DONE
-    - On a PER MONTH basis. DONE
-
 TODO:
-    - Add functionality so that app knows the date, and in which monthly cycle it is. DONE
-    - Need to create one dataset per week, and then add the weeks to the monthly dataset. DONE
-    - These monthly dataset will serve as the basis for the statistical stuff. DONE
+- Archive: Look at past months. Show stacked bar graph to show how spending has changed in each category.
+- View the complete list of spendings (chronologically and sorted by category, smallest to largest).
 
-    - Save past entries into database. DONE
-    - Load database. DONE
-
-    - Archive: Look at past months. Show stacked bar graph to show how spending has changed in each category.
-    - Look at complete list of spendings (chronologically and sorted by category and sorted by smallest / largest)
+DONE:
+- Visualization of spending in each category (pie chart).
+- Daily Budget Counter (number of days in positive, total sum accumulated).
+- Total spending.
+- On a PER MONTH basis.
+- Add functionality so that app knows the date and in which monthly cycle it is.
+- Create one dataset per week and add the weeks to the monthly dataset.
+- Save past entries into the database.
+- Load database.
 '''
 
+# Import Libraries
+# GUI
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
@@ -30,34 +27,28 @@ from kivy.uix.popup import Popup
 from kivy.uix.image import Image
 from kivy.core.image import Image as CoreImage
 from kivy.uix.widget import Widget
+from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
+
+# Data Analysis
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
 from datetime import datetime
+
+# Database
 import json
 import os
 
-kategorien = [
-    ("Wohnen", 1),
-    ("Lebensmittel & Haushaltswaren", 2),
-    ("Transport", 3),
-    ("Gesundheit und Pflege", 4),
-    ("Freizeit", 5),
-]
-
-# Initial empty DataFrame with EntryID column
+# Initialize the DataFrame for storing entries
 df = pd.DataFrame(columns=['EntryID', 'Kategorie', 'Label', 'Betrag', 'Timestamp'])
+next_entry_id = 0  # Variable to keep track of the next EntryID
 
-# Variable to keep track of the next EntryID
-next_entry_id = 0
 
 # Function to add a new entry to the DataFrame
 def add_entry(kategorie, label, betrag):
     global df, next_entry_id
-    # Get the current timestamp
-    timestamp = datetime.now()
-    # Create a new row with the entry data, including the EntryID
+    timestamp = datetime.now()  # Get the current timestamp
     new_entry = pd.DataFrame({
         'EntryID': [next_entry_id],
         'Kategorie': [kategorie],
@@ -65,110 +56,82 @@ def add_entry(kategorie, label, betrag):
         'Betrag': [betrag],
         'Timestamp': [timestamp]
     })
-    # Append the new entry to the DataFrame
-    df = pd.concat([df, new_entry], ignore_index=True)
-    # Increment the EntryID for the next entry
-    next_entry_id += 1
-    print("New entry added:", new_entry)  # Print to console for confirmation
+    df = pd.concat([df, new_entry], ignore_index=True)  # Append the new entry to the DataFrame
+    next_entry_id += 1  # Increment the EntryID for the next entry
+    print("New entry added:", new_entry)  # Print confirmation
+    save_data_to_json()  # Save the updated DataFrame to JSON
 
-    # Save the updated DataFrame to JSON
-    save_data_to_json()
 
 # Function to remove an entry by EntryID
 def remove_entry(entry_id):
     global df
-    # Check if the EntryID exists in the DataFrame
     if entry_id in df['EntryID'].values:
-        # Drop the row with the specified EntryID
-        df = df[df['EntryID'] != entry_id]
+        df = df[df['EntryID'] != entry_id]  # Drop the row with the specified EntryID
         print(f"Entry {entry_id} removed successfully.")
     else:
         print(f"Entry {entry_id} does not exist.")
 
-# Saving and loading database to and from JSON
+
+# Saving the DataFrame to a JSON file
 def save_data_to_json():
-    # Convert the DataFrame to a dictionary with string format for Timestamps
     data_dict = df.copy()
     data_dict['Timestamp'] = data_dict['Timestamp'].apply(lambda x: x.isoformat() if pd.notnull(x) else None)
     data_dict = data_dict.to_dict(orient='records')
 
-    # Save the dictionary as a JSON file
     with open('budget_data.json', 'w') as json_file:
         json.dump(data_dict, json_file)
     print("Data saved to budget_data.json")
 
+
+# Loading the DataFrame from a JSON file
 def load_data_from_json():
     global df
-    # Check if the JSON file exists
     if os.path.exists('budget_data.json'):
         with open('budget_data.json', 'r') as json_file:
             data_dict = json.load(json_file)
-            # Convert the dictionary back to a DataFrame
             df = pd.DataFrame(data_dict)
-            # Convert the 'Timestamp' column back to datetime objects
             df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce')
         print("Data loaded from budget_data.json")
     else:
         print("No data file found. Starting with an empty DataFrame.")
 
 
-# Statistics stuff
-
+# Functions to calculate statistics
 def get_total_spending_for_day(date):
-    # Convert the date to a datetime object
     date = pd.to_datetime(date)
-    # Filter the DataFrame for entries on the given day
     day_entries = df[df['Timestamp'].dt.date == date.date()]
-    # Calculate the total spending for the day
     total_spending = day_entries['Betrag'].sum()
     return total_spending
 
+
 def get_total_spending_for_week(date):
-    # Convert the date to a datetime object
     date = pd.to_datetime(date)
-    # Calculate the start and end of the week
     start_of_week = date - pd.Timedelta(days=date.weekday())
     end_of_week = start_of_week + pd.Timedelta(days=6)
-    # Filter the DataFrame for entries in the given week
     week_entries = df[(df['Timestamp'] >= start_of_week) & (df['Timestamp'] <= end_of_week)]
-    # Calculate the total spending for the week
     total_spending = week_entries['Betrag'].sum()
     return total_spending
 
+
 def get_total_spending_for_month(year, month):
-    # Filter the DataFrame for entries in the given month
     month_entries = df[(df['Timestamp'].dt.year == year) & (df['Timestamp'].dt.month == month)]
-    # Calculate the total spending for the month
     total_spending = month_entries['Betrag'].sum()
     return total_spending
 
 
 def calculate_budget_counter(daily_budget):
     global df
-    # Get the current date
     current_date = datetime.now()
-
-    # Determine the first day of the current month
     first_of_month = current_date.replace(day=1)
-
-    # Calculate the total days elapsed in the current month including today
     days_elapsed = (current_date - first_of_month).days + 1
 
     if df.empty:
         return days_elapsed
 
-    # Filter the DataFrame for entries in the current month
     current_month_entries = df[df['Timestamp'].dt.month == current_date.month]
-
-    # Calculate the total spending for the current month
     total_spending_month = current_month_entries['Betrag'].sum()
-
-    # Calculate the expected spending based on the daily budget
     expected_spending = days_elapsed * daily_budget
-
-    # Calculate the budget counter
     budget_counter = (expected_spending - total_spending_month) / daily_budget
-
     return round(budget_counter)
 
 
@@ -176,49 +139,42 @@ daily_budget = 25  # Set the daily budget
 budget_counter = calculate_budget_counter(daily_budget)
 print("Budget Counter for the current month:", budget_counter)
 
-# Visualizations
+
+# Function to generate the pie chart visualization
 def generate_pie_chart(width, height):
-    # Example data for the pie chart
     categories = df['Kategorie'].unique()
     spending = [df[df['Kategorie'] == category]['Betrag'].sum() for category in categories]
-
-    # Calculate the figure size in inches (assuming 100 pixels per inch for DPI)
     dpi = 100
     fig_width = width / dpi
     fig_height = height / dpi
 
-    # Create a pie chart with the specified figure size
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-
-    # Generate pie chart with larger font size and no border
     wedges, texts, autotexts = ax.pie(
         spending,
         labels=categories,
         autopct='%1.1f%%',
         startangle=90,
-        textprops=dict(color='white', fontsize=15),  # Increase font size
+        textprops=dict(color='white', fontsize=15),
     )
 
     for text in texts:
         text.set_color('white')
-        text.set_fontsize(15)  # Set font size for labels
+        text.set_fontsize(15)
 
     for autotext in autotexts:
         autotext.set_color('black')
-        autotext.set_fontsize(15)  # Set font size for percentages
+        autotext.set_fontsize(15)
 
-    ax.axis('equal')  # Equal aspect ratio ensures the pie is drawn as a circle.
+    ax.axis('equal')
 
-    # Save the pie chart to a BytesIO object with transparent background
     buf = io.BytesIO()
     plt.savefig(buf, format='png', transparent=True, bbox_inches='tight')
     buf.seek(0)
-    plt.close(fig)  # Close the figure to free memory
-
+    plt.close(fig)
     return buf
 
-# GUI stuff
-# Custom popup class to get amount and label
+
+# Custom popup class for adding a new entry
 class EntryPopup(Popup):
     def __init__(self, category, on_submit, **kwargs):
         super().__init__(**kwargs)
@@ -227,34 +183,27 @@ class EntryPopup(Popup):
         self.category = category
         self.size_hint = (0.8, 0.4)
 
-        # Layout
         layout = GridLayout(cols=2, padding=5, spacing=5)
-
-        # Label and TextInput for 'Label'
         layout.add_widget(Label(text='Label'))
-        self.label_input = TextInput(multiline=False, size_hint_y=None, height=40)  # Single-line text input
+        self.label_input = TextInput(multiline=False, size_hint_y=None, height=40)
         layout.add_widget(self.label_input)
 
-        # Label and TextInput for 'Amount'
         layout.add_widget(Label(text='Amount'))
-        self.amount_input = TextInput(multiline=False, input_filter='float', size_hint_y=None, height=40)  # Single-line text input
+        self.amount_input = TextInput(multiline=False, input_filter='float', size_hint_y=None, height=40)
         layout.add_widget(self.amount_input)
 
-        # Buttons for Submit and Cancel
         button_layout = BoxLayout(orientation='horizontal', spacing=10)
         submit_button = Button(text='Submit', on_press=self.submit_entry)
         cancel_button = Button(text='Cancel', on_press=self.dismiss)
         button_layout.add_widget(submit_button)
         button_layout.add_widget(cancel_button)
 
-        # Main layout
         main_layout = BoxLayout(orientation='vertical', spacing=10)
         main_layout.add_widget(layout)
         main_layout.add_widget(button_layout)
 
         self.content = main_layout
 
-        # Bind keyboard events
         Window.bind(on_key_down=self.on_key_down)
 
     def on_key_down(self, window, key, *args):
@@ -281,93 +230,114 @@ class EntryPopup(Popup):
         amount = self.amount_input.text
         if label and amount:
             add_entry(self.category, label, float(amount))
-            self.on_submit()  # Call without arguments
+            self.on_submit()  # Call update function without arguments
             self.dismiss()
 
     def cancel_entry(self, instance):
         self.dismiss()
 
-# Main layout with buttons for each category
 
+# Popup class to view all entries
+class ViewEntriesPopup(Popup):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.title = "All Entries"
+        self.size_hint = (0.8, 0.8)
+
+        scroll_view = ScrollView()
+        layout = GridLayout(cols=1, spacing=10, size_hint_y=None)
+        layout.bind(minimum_height=layout.setter('height'))
+
+        # Add entries from the DataFrame to the layout
+        for index, row in df.iterrows():
+            entry_label = Label(
+                text=f"ID: {row['EntryID']} | Kategorie: {row['Kategorie']} | Label: {row['Label']} | Betrag: {row['Betrag']} | Timestamp: {row['Timestamp']}",
+                size_hint_y=None,
+                height=40
+            )
+            layout.add_widget(entry_label)
+
+        scroll_view.add_widget(layout)
+        self.add_widget(scroll_view)
+
+
+# Main application class
 class BudgetApp(App):
     def build(self):
-        # Main layout of the app
         main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
 
-        # Layout for the top section (totals and counters)
         self.top_layout = BoxLayout(orientation='vertical', size_hint_y=0.2)
 
-        # Create labels for total spending and budget counter
         self.total_spending_label = Label(text="Total Spending: $0")
         self.budget_counter_label = Label(text="Budget Counter: 0")
 
-        # Add labels to the top layout
         self.top_layout.add_widget(self.total_spending_label)
         self.top_layout.add_widget(self.budget_counter_label)
 
-        # Layout for the pie chart
-        self.pie_chart_image = Image(size_hint_y=0.6)  # Dynamically resize based on available space
-        self.pie_chart_image.bind(size=self.on_resize)  # Bind size change to on_resize method
+        self.pie_chart_image = Image(size_hint_y=0.6)
+        self.pie_chart_image.bind(size=self.on_resize)
 
-        # Layout for the buttons at the bottom
         self.bottom_layout = BoxLayout(orientation='horizontal', size_hint_y=0.2)
 
-        # Categories
-        categories = ["Rent",
-                      "Groceries",
-                      "Transport",
-                      "Health",
-                      "Entertainment"]
+        categories = ["Rent", "Groceries", "Transport", "Health", "Entertainment"]
 
-        # Create buttons for each category
         for i, category in enumerate(categories, start=1):
             button = Button(text=f"{category}")
             button.bind(on_press=lambda instance, cat=category: self.show_entry_popup(cat))
             self.bottom_layout.add_widget(button)
 
-        # Add all widgets to the main layout
         main_layout.add_widget(self.top_layout)
         main_layout.add_widget(self.pie_chart_image)
         main_layout.add_widget(self.bottom_layout)
 
-        # Update totals and counters
         self.update_totals_and_counters()
         return main_layout
 
-    def on_resize(self, instance, value):
-        # Get the new size of the pie chart image
-        width, height = instance.size
-        # Regenerate the pie chart with the new size
-        self.update_pie_chart(width, height)
+    def on_resize(self, *args):
+        """Handles window resizing and updates the pie chart size."""
+        # Calculate new size of the pie chart image
+        width, height = self.pie_chart_image.size
+
+        # Ensure height adjustment maintains aspect ratio or fits within limits
+        if width > 0 and height > 0:
+            self.pie_chart_image.height = height
+            self.update_pie_chart(width, height)
+
+    def show_entries_popup(self, instance):
+        """Displays all entries in a popup."""
+        popup = ViewEntriesPopup()
+        popup.open()
 
     def show_entry_popup(self, category):
-        # Create and open the popup for data entry
+        """Displays a popup to add a new entry for the selected category."""
         popup = EntryPopup(category, self.update_totals_and_counters)
         popup.open()
 
     def update_totals_and_counters(self):
-        # Calculate the total spending
+        """Updates the total spending and budget counter labels."""
         total_spending = df['Betrag'].sum()
-
-        # Calculate the budget counter (you might need to adjust this based on your logic)
         daily_budget = 25  # Example daily budget
         days_in_month = datetime.now().day
         expected_spending = daily_budget * days_in_month
         budget_counter = (expected_spending - total_spending) / daily_budget
 
-        # Update the labels
+        # Update label text
         self.total_spending_label.text = f"Total Spending: ${total_spending:.2f}"
         self.budget_counter_label.text = f"Budget Counter: {budget_counter:.2f}"
 
-        # Update the pie chart
+        # Update pie chart
         self.update_pie_chart(self.pie_chart_image.width, self.pie_chart_image.height)
 
     def update_pie_chart(self, width, height):
+        """Generates and updates the pie chart image dynamically."""
         pie_chart_buf = generate_pie_chart(width, height)
         img = CoreImage(pie_chart_buf, ext='png')
         self.pie_chart_image.texture = img.texture
 
+
+
+
 if __name__ == '__main__':
-    # Load existing data from JSON file
     load_data_from_json()
     BudgetApp().run()
+
